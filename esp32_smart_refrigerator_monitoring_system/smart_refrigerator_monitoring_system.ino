@@ -239,7 +239,7 @@ void loop() {
 
     updateOLEDDisplay();
 
-    //sendDataToMySQL();
+    sendDataToMySQL();
   }
 }
 
