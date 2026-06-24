@@ -28,7 +28,7 @@ class _DashboardScreenState extends State<DashboardPage> {
   Timer? _timer;
 
   String selectedMetric = 'Temperature';
-  int selectedDays = 7;
+  int selectedDays = 1;
 
   final List<String> metrics = ['Temperature', 'Humidity', 'Gas Level'];
   final List<int> dayOptions = [1, 3, 7, 14, 30];
@@ -148,7 +148,6 @@ class _DashboardScreenState extends State<DashboardPage> {
     try {
       final data = await ApiService().getHistory(
         widget.deviceId,
-        limit: 100,
         days: selectedDays,
       );
       if (mounted) {
@@ -508,149 +507,175 @@ class _DashboardScreenState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildHistoryChart() {
-    final unit = getMetricUnit();
+Widget _buildHistoryChart() {
+  final unit = getMetricUnit();
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButton<String>(
-                  value: selectedMetric,
-                  isExpanded: true,
-                  underline: const SizedBox.shrink(),
-                  items: metrics.map((metric) {
-                    return DropdownMenuItem(
-                      value: metric,
-                      child: Text('$metric Trend'),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        selectedMetric = value;
-                      });
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: 16),
-              DropdownButton<int>(
-                value: selectedDays,
+  return Container(
+    padding: const EdgeInsets.all(16),
+    decoration: _cardDecoration(),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButton<String>(
+                value: selectedMetric,
+                isExpanded: true,
                 underline: const SizedBox.shrink(),
-                items: dayOptions.map((days) {
+                items: metrics.map((metric) {
                   return DropdownMenuItem(
-                    value: days,
-                    child: Text('$days days'),
+                    value: metric,
+                    child: Text('$metric Trend'),
                   );
                 }).toList(),
                 onChanged: (value) {
                   if (value != null) {
                     setState(() {
-                      selectedDays = value;
+                      selectedMetric = value;
                     });
-                    fetchHistory();
                   }
                 },
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 180,
-            child: historyData.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No history data',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  )
-                : LineChart(
-                    LineChartData(
-                      gridData: const FlGridData(show: true),
-                      titlesData: FlTitlesData(
-                        leftTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 36,
-                            getTitlesWidget: (value, meta) {
-                              return Text(
-                                value.toStringAsFixed(0),
-                                style: const TextStyle(fontSize: 10),
-                              );
-                            },
-                          ),
-                        ),
-                        bottomTitles: const AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
-                        rightTitles: const AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
-                        topTitles: const AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
+            ),
+            const SizedBox(width: 16),
+            DropdownButton<int>(
+              value: selectedDays,
+              underline: const SizedBox.shrink(),
+              items: dayOptions.map((days) {
+                return DropdownMenuItem(
+                  value: days,
+                  child: Text('$days days'),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    selectedDays = value;
+                  });
+                  fetchHistory();
+                }
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 180,
+          child: historyData.isEmpty
+              ? const Center(
+                  child: Text(
+                    'No history data',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                )
+              : LineChart(
+                  LineChartData(
+                    gridData: const FlGridData(show: true),
+                    titlesData: FlTitlesData(
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 36,
+                          getTitlesWidget: (value, meta) {
+                            return Text(
+                              value.toStringAsFixed(0),
+                              style: const TextStyle(fontSize: 10),
+                            );
+                          },
                         ),
                       ),
-                      borderData: FlBorderData(show: false),
-                      minX: 0,
-                      maxX: historyData.length.toDouble() - 1,
-                      minY: getMinValue(),
-                      maxY: getMaxValue(),
-                      lineBarsData: [
-                        LineChartBarData(
-                          spots: getChartData(),
-                          isCurved: true,
-                          color: getLineColor(),
-                          barWidth: 2,
-                          dotData: const FlDotData(show: false),
-                          belowBarData: BarAreaData(
-                            show: true,
-                            color: getLineColor().withOpacity(0.1),
-                          ),
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 28,
+                          getTitlesWidget: (value, meta) {
+                            int index = value.toInt();
+                            if (historyData.isEmpty || index < 0 || index >= historyData.length) {
+                              return const Text('');
+                            }
+                            
+                            // Determine label format based on selected days
+                            String format;
+                            if (selectedDays <= 1) {
+                              format = 'HH:mm';
+                            } else {
+                              format = 'MM/dd';
+                            }
+                            
+                            // Show every 5th label or last one to avoid crowding
+                            if (index % 5 == 0 || index == historyData.length - 1) {
+                              return Text(
+                                DateFormat(format).format(historyData[index].createdAt),
+                                style: const TextStyle(fontSize: 8),
+                              );
+                            }
+                            return const Text('');
+                          },
                         ),
-                      ],
+                      ),
+                      rightTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      topTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
                     ),
+                    borderData: FlBorderData(show: false),
+                    minX: 0,
+                    maxX: historyData.length.toDouble() - 1,
+                    minY: getMinValue(),
+                    maxY: getMaxValue(),
+                    lineBarsData: [
+                      LineChartBarData(
+                        spots: getChartData(),
+                        isCurved: true,
+                        color: getLineColor(),
+                        barWidth: 2,
+                        dotData: const FlDotData(show: false),
+                        belowBarData: BarAreaData(
+                          show: true,
+                          color: getLineColor().withOpacity(0.1),
+                        ),
+                      ),
+                    ],
                   ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildMiniStat(
-                'Avg',
-                historyData.isEmpty
-                    ? '--'
-                    : getAverageValue().toStringAsFixed(1),
-                unit,
-                Colors.blue,
-              ),
-              _buildMiniStat(
-                'Min',
-                historyData.isEmpty
-                    ? '--'
-                    : getLowestValue().toStringAsFixed(1),
-                unit,
-                Colors.green,
-              ),
-              _buildMiniStat(
-                'Max',
-                historyData.isEmpty
-                    ? '--'
-                    : getHighestValue().toStringAsFixed(1),
-                unit,
-                Colors.red,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+                ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildMiniStat(
+              'Avg',
+              historyData.isEmpty
+                  ? '--'
+                  : getAverageValue().toStringAsFixed(1),
+              unit,
+              Colors.blue,
+            ),
+            _buildMiniStat(
+              'Min',
+              historyData.isEmpty
+                  ? '--'
+                  : getLowestValue().toStringAsFixed(1),
+              unit,
+              Colors.green,
+            ),
+            _buildMiniStat(
+              'Max',
+              historyData.isEmpty
+                  ? '--'
+                  : getHighestValue().toStringAsFixed(1),
+              unit,
+              Colors.red,
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildSensorCard({
     required String title,

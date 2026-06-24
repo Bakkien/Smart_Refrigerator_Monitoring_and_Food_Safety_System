@@ -337,9 +337,9 @@ class _SettingsScreenState extends State<SettingsPage> {
                         ),
                         RangeSlider(
                           values: RangeValues(_humidityLow, _humidityHigh),
-                          min: 0,
-                          max: 100,
-                          divisions: 100,
+                          min: 20,
+                          max: 90,
+                          divisions: 70,
                           labels: RangeLabels(
                             '${_humidityLow.toStringAsFixed(0)}%',
                             '${_humidityHigh.toStringAsFixed(0)}%',

@@ -39,7 +39,6 @@ class ApiService {
         Uri.parse('$baseUrl/getHistory.php').replace(
           queryParameters: {
             'device_id': deviceId,
-            'limit': limit.toString(),
             'days': days.toString(),
           },
         ),
