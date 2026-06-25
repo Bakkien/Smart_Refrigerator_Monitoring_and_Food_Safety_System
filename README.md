@@ -40,8 +40,7 @@ The system is built on a four-layer architecture:
 
 ## Circuit Diagram
 
-<img width="845" height="897" alt="image" src="https://github.com/user-attachments/assets/d9b58f93-f0a4-4431-9306-38cbc81f1dbf" />
-
+<img width="500" height="552" alt="image" src="https://github.com/user-attachments/assets/d9b58f93-f0a4-4431-9306-38cbc81f1dbf" />
 
 ## Backend API Endpoints
 
