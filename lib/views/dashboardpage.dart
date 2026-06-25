@@ -41,6 +41,7 @@ class _DashboardScreenState extends State<DashboardPage> {
     _timer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (mounted) {
         fetchLatestOnly();
+        fetchHistory();
       }
     });
   }
