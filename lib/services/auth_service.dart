@@ -21,9 +21,14 @@ class AuthService {
     if (userId == null) return null;
 
     final deviceId = prefs.getString(_deviceIdKey) ?? '';
+    final username = prefs.getString(_usernameKey) ?? '';
+    final email = prefs.getString(_emailKey) ?? '';
+
     return {
       'userId': userId,
       'deviceId': deviceId,
+      'username': username,
+      'email': email,
     };
   }
 

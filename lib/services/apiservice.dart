@@ -105,6 +105,54 @@ class ApiService {
     }
   }
 
+  Future<Map<String, String>?> getWifiConfig(String deviceId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/getWifiConfig.php').replace(
+          queryParameters: {'device_id': deviceId},
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['status'] == 'success') {
+          final wifi = data['data'];
+          return {
+            'wifi_ssid': wifi['wifi_ssid']?.toString() ?? '',
+            'wifi_password': wifi['wifi_password']?.toString() ?? '',
+          };
+        }
+      }
+      return null;
+    } catch (e) {
+      print('Error getting wifi config: $e');
+      return null;
+    }
+  }
+
+  Future<bool> updateWifiConfig(String deviceId, String ssid, String password) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/updateWifiConfig.php'),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {
+          'device_id': deviceId,
+          'wifi_ssid': ssid,
+          'wifi_password': password,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['status'] == 'success';
+      }
+      return false;
+    } catch (e) {
+      print('Error updating wifi config: $e');
+      return false;
+    }
+  }
+
   Future<User?> loginUser(String username, String password) async {
     try {
       final response = await http.post(

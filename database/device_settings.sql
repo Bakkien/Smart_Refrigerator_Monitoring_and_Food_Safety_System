@@ -30,6 +30,8 @@ SET time_zone = "+00:00";
 CREATE TABLE `device_settings` (
   `id` int(11) NOT NULL,
   `device_id` varchar(50) NOT NULL,
+  `wifi_ssid` varchar(50) DEFAULT NULL,
+  `wifi_password` varchar(100) DEFAULT NULL,
   `temperature_threshold` float DEFAULT NULL,
   `humidity_threshold_low` float DEFAULT NULL,
   `humidity_threshold_high` float DEFAULT NULL,
@@ -44,8 +46,8 @@ CREATE TABLE `device_settings` (
 -- Dumping data for table `device_settings`
 --
 
-INSERT INTO `device_settings` (`id`, `device_id`, `temperature_threshold`, `humidity_threshold_low`, `humidity_threshold_high`, `gas_threshold_normal`, `gas_threshold_warning`, `upload_interval`, `buzzer_enabled`, `updated_at`) VALUES
-(1, 'SRM01', 36, 46, 85, 150, 295, 5, 0, '2026-06-25 02:12:19');
+INSERT INTO `device_settings` (`id`, `device_id`, `wifi_ssid`, `wifi_password`, `temperature_threshold`, `humidity_threshold_low`, `humidity_threshold_high`, `gas_threshold_normal`, `gas_threshold_warning`, `upload_interval`, `buzzer_enabled`, `updated_at`) VALUES
+(1, 'SRM01', 'myUUM_Guest', '', 10, 50, 85, 150, 300, 5, 0, '2026-06-25 02:12:19');
 
 --
 -- Indexes for dumped tables
