@@ -8,9 +8,10 @@ import '../models/settings.dart';
 
 class DashboardPage extends StatefulWidget {
   final String deviceId;
+  final int? userId;
   final ValueChanged<String>? onDeviceChanged;
 
-  const DashboardPage({Key? key, required this.deviceId, this.onDeviceChanged})
+  const DashboardPage({Key? key, required this.deviceId, this.userId, this.onDeviceChanged})
     : super(key: key);
 
   @override
@@ -29,6 +30,9 @@ class _DashboardScreenState extends State<DashboardPage> {
 
   String selectedMetric = 'Temperature';
   int selectedDays = 1;
+
+  bool get _hasSelectedDevice => widget.deviceId.isNotEmpty;
+  bool get _canRegisterDevice => widget.userId != null;
 
   final List<String> metrics = ['Temperature', 'Humidity', 'Gas Level'];
   final List<int> dayOptions = [1, 3, 7, 14, 30];
@@ -77,8 +81,7 @@ class _DashboardScreenState extends State<DashboardPage> {
     });
 
     try {
-      final data = await ApiService().getDeviceList();
-      final devices = data.isEmpty ? [widget.deviceId] : data;
+      final devices = await ApiService().getDeviceList();
 
       if (!mounted) return;
 
@@ -88,13 +91,15 @@ class _DashboardScreenState extends State<DashboardPage> {
       });
 
       if (!devices.contains(widget.deviceId) && devices.isNotEmpty) {
-        widget.onDeviceChanged?.call(devices.first);
+        if (widget.userId == null || widget.deviceId.isNotEmpty) {
+          widget.onDeviceChanged?.call(devices.first);
+        }
       }
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        deviceIds = [widget.deviceId];
+        deviceIds = [];
         isLoadingDevices = false;
       });
       print('Error fetching devices: $e');
@@ -106,6 +111,18 @@ class _DashboardScreenState extends State<DashboardPage> {
       isLoading = true;
       error = null;
     });
+
+    if (!_hasSelectedDevice) {
+      if (!mounted) return;
+      setState(() {
+        latestData = null;
+        settings = null;
+        historyData = [];
+        isLoading = false;
+        error = 'No device selected';
+      });
+      return;
+    }
 
     await Future.wait([fetchLatestOnly(), fetchSettings(), fetchHistory()]);
 
@@ -120,6 +137,8 @@ class _DashboardScreenState extends State<DashboardPage> {
   }
 
   Future<void> fetchLatestOnly() async {
+    if (!_hasSelectedDevice) return;
+
     try {
       final data = await ApiService().getLatestData(widget.deviceId);
       if (mounted) {
@@ -133,6 +152,8 @@ class _DashboardScreenState extends State<DashboardPage> {
   }
 
   Future<void> fetchSettings() async {
+    if (!_hasSelectedDevice) return;
+
     try {
       final data = await ApiService().getSettings(widget.deviceId);
       if (mounted) {
@@ -146,6 +167,8 @@ class _DashboardScreenState extends State<DashboardPage> {
   }
 
   Future<void> fetchHistory() async {
+    if (!_hasSelectedDevice) return;
+
     try {
       final data = await ApiService().getHistory(
         widget.deviceId,
@@ -298,26 +321,28 @@ class _DashboardScreenState extends State<DashboardPage> {
         elevation: 0,
         foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: refreshDashboard,
-          ),
+          if (_canRegisterDevice)
+            IconButton(
+              icon: const Icon(Icons.add),
+              tooltip: 'Register device',
+              onPressed: _showRegisterDeviceDialog,
+            ),
         ],
       ),
       body: RefreshIndicator(
         onRefresh: refreshDashboard,
         child: isLoading && latestData == null
             ? const Center(child: CircularProgressIndicator())
-            : latestData == null
-            ? _buildEmptyState()
-            : SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    _buildDeviceSelector(),
-                    const SizedBox(height: 16),
-                    _buildStatusCard(),
+            : (!_hasSelectedDevice || latestData == null)
+                ? _buildEmptyState()
+                : SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        _buildDeviceSelector(),
+                        const SizedBox(height: 16),
+                        _buildStatusCard(),
                     const SizedBox(height: 16),
                     Row(
                       children: [
@@ -380,24 +405,54 @@ class _DashboardScreenState extends State<DashboardPage> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
+    final bool hasAvailableDevices = deviceIds.isNotEmpty;
+    final bool noDeviceRegistered = !_hasSelectedDevice && widget.userId != null;
+    final message = !_hasSelectedDevice
+        ? hasAvailableDevices
+            ? 'No device selected. Choose a device to view sensor data or register your device.'
+            : 'No device selected. Register a device ID to view sensor data.'
+        : error ?? 'No data available for the selected device.';
+
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(16),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
-          const SizedBox(height: 16),
-          Text(
-            error ?? 'No data available',
-            style: TextStyle(color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: fetchData,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue[700],
-              foregroundColor: Colors.white,
+          _buildDeviceSelector(),
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            child: const Text('Retry'),
+            child: Column(
+              children: [
+                Icon(Icons.info_outline, size: 64, color: Colors.grey[500]),
+                const SizedBox(height: 16),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: hasAvailableDevices ? fetchDevices : _showRegisterDeviceDialog,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[700],
+                    foregroundColor: Colors.white,
+                  ),
+                  child: Text(hasAvailableDevices ? 'Reload Devices' : 'Register Device'),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -733,6 +788,29 @@ Widget _buildHistoryChart() {
     );
   }
 
+  Future<void> _showRegisterDeviceDialog() async {
+    if (widget.userId == null) return;
+
+    final registered = await showDialog<bool>(
+      context: context,
+      builder: (_) => _RegisterDeviceDialog(
+        userId: widget.userId!,
+        onRegistered: (deviceId) {
+          widget.onDeviceChanged?.call(deviceId);
+        },
+      ),
+    );
+
+    if (mounted && registered == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Device registered successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
   Widget _buildMiniStat(String label, String value, String unit, Color color) {
     return Row(
       children: [
@@ -752,19 +830,126 @@ Widget _buildHistoryChart() {
       ],
     );
   }
+}
 
-  BoxDecoration _cardDecoration() {
-    return BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.grey.withOpacity(0.1),
-          spreadRadius: 1,
-          blurRadius: 5,
-          offset: const Offset(0, 2),
+class _RegisterDeviceDialog extends StatefulWidget {
+  final int userId;
+  final ValueChanged<String> onRegistered;
+
+  const _RegisterDeviceDialog({
+    Key? key,
+    required this.userId,
+    required this.onRegistered,
+  }) : super(key: key);
+
+  @override
+  _RegisterDeviceDialogState createState() => _RegisterDeviceDialogState();
+}
+
+class _RegisterDeviceDialogState extends State<_RegisterDeviceDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final TextEditingController _controller = TextEditingController();
+  bool _isSubmitting = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _registerDevice() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+
+    final deviceId = _controller.text.trim();
+    final success = await ApiService().registerDevice(widget.userId, deviceId);
+
+    if (!mounted) return;
+
+    if (success) {
+      widget.onRegistered(deviceId);
+      Navigator.of(context).pop(true);
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = false;
+      _errorMessage = 'Failed to register device. Please check the device ID and try again.';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Register Device'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _controller,
+              decoration: const InputDecoration(
+                labelText: 'Device ID',
+                hintText: 'Enter your device ID',
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Please enter a device ID';
+                }
+                return null;
+              },
+            ),
+            if (_errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  _errorMessage!,
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _isSubmitting ? null : _registerDevice,
+          child: _isSubmitting
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text('Register'),
         ),
       ],
     );
   }
+}
+
+BoxDecoration _cardDecoration() {
+  return BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(12),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.grey.withOpacity(0.1),
+        spreadRadius: 1,
+        blurRadius: 5,
+        offset: const Offset(0, 2),
+      ),
+    ],
+  );
 }

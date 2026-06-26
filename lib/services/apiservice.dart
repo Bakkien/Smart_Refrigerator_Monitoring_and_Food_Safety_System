@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/sensordata.dart';
 import '../models/settings.dart';
+import '../models/user.dart';
 
 class ApiService {
   static const String baseUrl = 'http://canorcannot.com/Bakkien/SRM/api';
@@ -104,6 +105,77 @@ class ApiService {
     }
   }
 
+  Future<User?> loginUser(String username, String password) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/loginUser.php'),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {
+          'username': username,
+          'password': password,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['status'] == 'success' && data['data'] != null) {
+          return User.fromJson(data['data']);
+        }
+      }
+      return null;
+    } catch (e) {
+      print('Error logging in: $e');
+      return null;
+    }
+  }
+
+  Future<User?> registerUser(String username, String email, String password) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/registerUser.php'),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {
+          'username': username,
+          'email': email,
+          'password': password,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['status'] == 'success' && data['data'] != null) {
+          return User.fromJson(data['data']);
+        }
+      }
+      return null;
+    } catch (e) {
+      print('Error registering user: $e');
+      return null;
+    }
+  }
+
+  Future<bool> registerDevice(int userId, String deviceId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/registerDevice.php'),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {
+          'user_id': userId.toString(),
+          'device_id': deviceId,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['status'] == 'success';
+      }
+      return false;
+    } catch (e) {
+      print('Error registering device: $e');
+      return false;
+    }
+  }
+
   // Get device list
   Future<List<String>> getDeviceList() async {
     try {
@@ -112,11 +184,10 @@ class ApiService {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['status'] == 'success') {
-          final devices = _parseDeviceIds(data);
-          return devices.isEmpty ? ['SRM01'] : devices;
+          return _parseDeviceIds(data);
         }
       }
-      return ['SRM01'];
+      return [];
     } catch (e) {
       print('Error getting device list: $e');
       return ['SRM01'];

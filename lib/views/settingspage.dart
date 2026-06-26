@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/apiservice.dart';
+import '../services/auth_service.dart';
 import '../models/settings.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -163,6 +164,19 @@ class _SettingsScreenState extends State<SettingsPage> {
                     FocusScope.of(context).unfocus();
                     fetchSettings();
                   },
+          ),
+          IconButton(
+            tooltip: 'Log out',
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              final navigator = Navigator.of(context);
+              await AuthService.clearSession();
+              if (!mounted) return;
+              navigator.pushNamedAndRemoveUntil(
+                '/login',
+                (route) => false,
+              );
+            },
           ),
         ],
       ),

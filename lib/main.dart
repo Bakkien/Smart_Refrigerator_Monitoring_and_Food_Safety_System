@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'views/dashboardpage.dart';
+import 'views/loginpage.dart';
+import 'views/registerpage.dart';
 import 'views/settingspage.dart';
+import 'views/splashpage.dart';
 
 void main() {
   runApp(const MyApp());
@@ -27,13 +30,26 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const MainScreen(),
+      home: const SplashPage(),
+      routes: {
+        '/login': (_) => const LoginPage(),
+        '/register': (_) => const RegisterPage(),
+        '/dashboard': (context) {
+          final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+          final userId = args != null ? args['userId'] as int? : null;
+          final deviceId = args != null ? args['deviceId'] as String? ?? '' : '';
+          return MainScreen(initialDeviceId: deviceId, userId: userId);
+        },
+      },
     );
   }
 }
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({Key? key}) : super(key: key);
+  final String initialDeviceId;
+  final int? userId;
+
+  const MainScreen({Key? key, this.initialDeviceId = '', this.userId}) : super(key: key);
 
   @override
   _MainScreenState createState() => _MainScreenState();
@@ -41,7 +57,13 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
-  String selectedDeviceId = 'SRM01';
+  String selectedDeviceId = '';
+
+  @override
+  void initState() {
+    super.initState();
+    selectedDeviceId = widget.initialDeviceId;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,6 +71,7 @@ class _MainScreenState extends State<MainScreen> {
       body: _selectedIndex == 0
           ? DashboardPage(
               deviceId: selectedDeviceId,
+              userId: widget.userId,
               onDeviceChanged: (deviceId) {
                 setState(() {
                   selectedDeviceId = deviceId;

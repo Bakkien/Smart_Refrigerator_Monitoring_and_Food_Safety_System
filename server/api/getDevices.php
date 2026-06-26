@@ -15,15 +15,9 @@ if ($result->num_rows > 0) {
     }
 }
 
-// If no devices found, add default device
-if (empty($devices)) {
-    $devices = ['SRM01'];
-}
-
 echo json_encode([
     "status" => "success",
-    "devices" => $devices,
-    "count" => count($devices)
+    "devices" => $devices
 ]);
 
 $conn->close();
