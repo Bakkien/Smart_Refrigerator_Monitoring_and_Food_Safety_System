@@ -46,10 +46,7 @@ class _LoginPageState extends State<LoginPage> {
       await AuthService.saveUserSession(user);
       navigator.pushReplacementNamed(
         '/dashboard',
-        arguments: {
-          'userId': user.id,
-          'deviceId': user.deviceId,
-        },
+        arguments: {'userId': user.id, 'deviceId': user.deviceId},
       );
     } else {
       messenger.showSnackBar(
@@ -64,6 +61,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(title: const Text('Smart Refrigerator Monitoring')),
       backgroundColor: Colors.blue[50],
       body: SafeArea(
         child: Center(
@@ -73,7 +71,7 @@ class _LoginPageState extends State<LoginPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
-                  'Smart Refrigerator Monitoring',
+                  'Login',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 24,
@@ -129,6 +127,13 @@ class _LoginPageState extends State<LoginPage> {
                             width: double.infinity,
                             child: ElevatedButton(
                               onPressed: _isLoading ? null : _login,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue[700],
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
                               child: _isLoading
                                   ? const SizedBox(
                                       height: 16,
