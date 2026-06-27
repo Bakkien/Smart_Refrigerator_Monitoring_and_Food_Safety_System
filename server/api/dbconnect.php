@@ -1,8 +1,8 @@
 <?php
     $servername = "localhost";
-    $username = "canortxw_bakkien";
-    $password = "C-%#jU6v,sHa";
-    $dbname = "canortxw_srm_db";
+    $username = "<your_database_username>";
+    $password = "<your_database_password>";
+    $dbname = "<your_database_name>";
     
     // Create connection
     $conn = new mysqli($servername, $username, $password, $dbname);

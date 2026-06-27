@@ -21,6 +21,9 @@ String wifiPassword;
 bool apMode = false;
 bool wifiCredentialsAvailable = false;
 bool settingsLoadedFromPreferences = false;
+unsigned long lastWiFiSettingsCheck = 0;
+String lastWiFiSSID = "";
+String lastWiFiPassword = "";
 
 String deviceID = "SRM01";
 
@@ -168,6 +171,7 @@ void setup() {
       wifiConnected = true;
       getSettingsFromPreferences();
       setupTime();
+      checkAndUpdateWiFiSettings();
       checkAndUpdateSettings();
     } else {
       Serial.println("WiFi connection failed. Starting AP mode...");
@@ -209,17 +213,12 @@ void loop() {
   // Handle buzzer
   handleBuzzer();
 
-  static unsigned long lastDisplayUpdate = 0;
-  if (currentMillis - lastDisplayUpdate >= 1000) {
-    lastDisplayUpdate = currentMillis;
-    updateOLEDDisplay();
-  }
-
   // Check for settings update only when needed
   if (WiFi.status() == WL_CONNECTED) {
     // Check settings every 5 minutes
     if (currentMillis - lastSettingsCheck >= 300000) {
       lastSettingsCheck = currentMillis;
+      checkAndUpdateWiFiSettings();
       checkAndUpdateSettings();
     }
   }
@@ -288,9 +287,116 @@ void saveWiFiSettings(String ssid, String password) {
   wifiPassword = password;
   wifiCredentialsAvailable = true;
   Serial.println("WiFi settings saved to preferences");
-  Serial.println("SSID: " + ssid);
-  Serial.print("Password: ");
-  Serial.println(password.length() > 0 ? "****" : "(empty)");
+}
+
+void updateWiFiSettingsToServer(String ssid, String password) {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi not connected. Saving WiFi settings to preferences only.");
+    saveWiFiSettings(ssid, password);
+    return;
+  }
+  
+  const char* serverURL = "http://canorcannot.com/Bakkien/SRM/api/updateWifiConfig.php";
+  
+  HTTPClient http;
+  http.begin(serverURL);
+  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  
+  String postData = "device_id=" + deviceID;
+  postData += "&wifi_ssid=" + ssid;
+  postData += "&wifi_password=" + password;
+  
+  Serial.println("Updating WiFi settings on server...");
+  int httpResponseCode = http.POST(postData);
+  
+  if (httpResponseCode > 0) {
+    String response = http.getString();
+    Serial.println("WiFi update response: " + response);
+    
+    StaticJsonDocument<256> doc;
+    DeserializationError error = deserializeJson(doc, response);
+    
+    if (!error) {
+      String respStatus = doc["status"];
+      if (respStatus == "success") {
+        Serial.println("WiFi settings updated on server!");
+        saveWiFiSettings(ssid, password);
+        lastWiFiSSID = ssid;
+        lastWiFiPassword = password;
+      } else {
+        String message = doc["message"];
+        Serial.println("Error: " + message);
+        // Still save locally even if server update failed
+        saveWiFiSettings(ssid, password);
+      }
+    } else {
+      Serial.println("Failed to parse WiFi update response");
+      // Still save locally
+      saveWiFiSettings(ssid, password);
+    }
+  } else {
+    Serial.println("Error updating WiFi settings. HTTP Code: " + String(httpResponseCode));
+    // Still save locally
+    saveWiFiSettings(ssid, password);
+  }
+  
+  http.end();
+}
+
+void checkAndUpdateWiFiSettings() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi not connected. Skipping WiFi settings update check.");
+    return;
+  }
+  
+  String serverURL = "http://canorcannot.com/Bakkien/SRM/api/getWifiConfig.php?device_id=" + deviceID;
+  
+  HTTPClient http;
+  http.begin(serverURL);
+  http.setTimeout(10000); // 10 second timeout
+  
+  Serial.println("Fetching WiFi settings from server...");
+  int httpResponseCode = http.GET();
+  
+  if (httpResponseCode > 0) {
+    String response = http.getString();
+    Serial.println("WiFi settings response received");
+    
+    StaticJsonDocument<512> doc;
+    DeserializationError error = deserializeJson(doc, response);
+    
+    if (!error) {
+      String status = doc["status"];
+      if (status == "success") {
+        JsonObject data = doc["data"];
+        
+        String newSSID = data["wifi_ssid"].as<String>();
+        String newPassword = data["wifi_password"].as<String>();
+        
+        // Check if WiFi settings have changed
+        if (newSSID.length() > 0 && (newSSID != lastWiFiSSID || newPassword != lastWiFiPassword)) {
+          Serial.println("WiFi settings updated from server!");
+          saveWiFiSettings(newSSID, newPassword);
+          lastWiFiSSID = newSSID;
+          lastWiFiPassword = newPassword;
+          
+          // Reconnect with new WiFi settings
+          Serial.println("Reconnecting with new WiFi settings...");
+          connectWiFi();
+        } else {
+          Serial.println("No WiFi settings changes detected from server");
+        }
+      } else {
+        Serial.println("Server returned error: " + doc["message"].as<String>());
+      }
+    } else {
+      Serial.println("Failed to parse WiFi settings JSON response");
+    }
+  } else {
+    Serial.println("Error fetching WiFi settings. HTTP Code: " + String(httpResponseCode));
+  }
+  
+  http.end();
 }
 
 void connectWiFi() {
@@ -347,7 +453,8 @@ void checkWiFiConnection() {
       wifiConnected = true;
       showWiFiStatus("CONNECTED");
       setupTime();
-      checkAndUpdateSettings(); // Check settings after reconnection
+      checkAndUpdateSettings();
+      checkAndUpdateWiFiSettings();
       delay(1000);
     } else {
       showWiFiStatus("FAILED");
@@ -356,35 +463,6 @@ void checkWiFiConnection() {
   } else {
     wifiConnected = true;
   }
-}
-
-void showWiFiStatus(String status) {
-  display.clearDisplay();
-  display.drawRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, SSD1306_WHITE);
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  
-  display.setCursor(2, 10);
-  display.println("WiFi Status");
-  display.drawLine(0, 20, 128, 20, SSD1306_WHITE);
-  
-  display.setCursor(2, 30);
-  display.print("SSID: ");
-  display.println(wifiSSID);
-  
-  display.setCursor(2, 42);
-  display.print("Status: ");
-  display.println(status);
-  
-  display.setCursor(2, 54);
-  if (status == "CONNECTED") {
-    display.print("IP: ");
-    display.print(WiFi.localIP());
-  } else {
-    display.print("Reconnecting...");
-  }
-  
-  display.display();
 }
 
 // =======================
@@ -415,39 +493,6 @@ void setupAPMode() {
   
   // Show AP mode on OLED
   showAPModeStatus();
-}
-
-void showAPModeStatus() {
-  display.clearDisplay();
-  display.drawRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, SSD1306_WHITE);
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  
-  // Title
-  display.setCursor(2, 2);
-  display.println("=== AP MODE ===");
-  display.drawLine(0, 12, 128, 12, SSD1306_WHITE);
-  
-  // IP Address
-  display.setCursor(2, 18);
-  display.print("IP: ");
-  display.println(WiFi.softAPIP());
-  
-  // SSID
-  display.setCursor(2, 30);
-  display.print("SSID: ");
-  display.println(AP_SSID);
-  
-  // Password
-  display.setCursor(2, 42);
-  display.print("PWD: ");
-  display.println(AP_PASSWORD);
-  
-  // Instruction
-  display.setCursor(2, 54);
-  display.println("Connect & Configure");
-  
-  display.display();
 }
 
 void handleRoot() {
@@ -1140,23 +1185,15 @@ float getDistanceCM() {
 }
 
 String getGasStatus(int gasValue) {
-  if (gasValue < gasThresholdNormal) {
-    return "NORMAL";
-  } else if (gasValue < gasThresholdWarning) {
-    return "SPOILAGE";
-  } else {
-    return "LEAK";
-  }
+  if (gasValue < gasThresholdNormal) return "NORMAL";
+  if (gasValue < gasThresholdWarning) return "SPOILAGE";
+  return "LEAK";
 }
 
 String getDoorStatus(float distance) {
-  if (distance < 0) {
-    return "ERROR";
-  } else if (distance > DOOR_OPEN_THRESHOLD) {
-    return "OPEN";
-  } else {
-    return "CLOSED";
-  }
+  if (distance < 0) return "ERROR";
+  if (distance > DOOR_OPEN_THRESHOLD) return "OPEN";
+  return "CLOSED";
 }
 
 String getSystemStatus() {
@@ -1220,19 +1257,12 @@ String getTimeString() {
 // Buzzer Functions
 // =======================
 bool shouldBuzzerBeActive() {
-  if (getSystemStatus() == "CRITICAL" || getSystemStatus() == "WARNING") {
-    return true;
-  }
-  return false;
+  return getSystemStatus() != "NORMAL";
 }
 
 int getBeepInterval() {
-  if (getSystemStatus() == "CRITICAL") {
-    return 200;
-  }
-  if (getSystemStatus() == "WARNING") {
-    return 400;
-  }
+  if (getSystemStatus() == "CRITICAL") return 200;
+  if (getSystemStatus() == "WARNING") return 400;
   return 0;
 }
 
@@ -1383,6 +1413,68 @@ void handleBootButton() {
 // =======================
 // OLED Display Function
 // =======================
+void showAPModeStatus() {
+  display.clearDisplay();
+  display.drawRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, SSD1306_WHITE);
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  
+  // Title
+  display.setCursor(2, 2);
+  display.println("=== AP MODE ===");
+  display.drawLine(0, 12, 128, 12, SSD1306_WHITE);
+  
+  // IP Address
+  display.setCursor(2, 18);
+  display.print("IP: ");
+  display.println(WiFi.softAPIP());
+  
+  // SSID
+  display.setCursor(2, 30);
+  display.print("SSID: ");
+  display.println(AP_SSID);
+  
+  // Password
+  display.setCursor(2, 42);
+  display.print("PWD: ");
+  display.println(AP_PASSWORD);
+  
+  // Instruction
+  display.setCursor(2, 54);
+  display.println("Connect & Configure");
+  
+  display.display();
+}
+
+void showWiFiStatus(String status) {
+  display.clearDisplay();
+  display.drawRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, SSD1306_WHITE);
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  
+  display.setCursor(2, 10);
+  display.println("WiFi Status");
+  display.drawLine(0, 20, 128, 20, SSD1306_WHITE);
+  
+  display.setCursor(2, 30);
+  display.print("SSID: ");
+  display.println(wifiSSID);
+  
+  display.setCursor(2, 42);
+  display.print("Status: ");
+  display.println(status);
+  
+  display.setCursor(2, 54);
+  if (status == "CONNECTED") {
+    display.print("IP: ");
+    display.print(WiFi.localIP());
+  } else {
+    display.print("Reconnecting...");
+  }
+  
+  display.display();
+}
+
 void updateOLEDDisplay() {
   if (apMode) {
     return;
@@ -1504,7 +1596,7 @@ void printStatus() {
 
   Serial.print("Humidity: ");
   Serial.print(latestHumidity);
-  Serial.print(" %");
+  Serial.print(" % ");
 
   Serial.print("Gas Status: ");
   Serial.print(getGasStatus(latestGas));
